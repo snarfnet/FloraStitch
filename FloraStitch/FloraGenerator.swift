@@ -48,7 +48,7 @@ enum FloraGenerator {
         let size = base.size, palette = base.palette
         if settings.birds {
             let unit = min(size.width, size.height)
-            for (x, direction) in [(0.28, 1.0), (0.72, -1.0)] {
+            for (x, direction) in [(0.28, 1.0), (0.56, -1.0)] {
                 let center = CGPoint(x: size.width * CGFloat(x), y: size.height * 0.26)
                 let radius = unit * 0.06
                 let direction = CGFloat(direction)

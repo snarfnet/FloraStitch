@@ -1,0 +1,29 @@
+name: Enhancement validation
+on:
+  push:
+    branches: ["improve/**"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Model regression tests
+        run: |
+          swiftc -target "$(uname -m)-apple-macosx14.0" FloraStitch/Models.swift FloraStitch/StitchPlanner.swift FloraStitch/FloraGenerator.swift FloraStitch/SavedDesign.swift Tests/main.swift -o "$RUNNER_TEMP/model-tests"
+          "$RUNNER_TEMP/model-tests"
+      - name: Install XcodeGen
+        run: command -v xcodegen || brew install xcodegen
+      - name: Build iPhone and iPad app
+        run: |
+          xcodegen generate
+          xcodebuild -project FloraStitch.xcodeproj -scheme FloraStitch -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build > build-validation.log 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-log
+          path: build-validation.log

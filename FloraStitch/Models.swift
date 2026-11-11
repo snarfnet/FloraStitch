@@ -101,7 +101,7 @@ struct StitchPoint {
     let jump: Bool
 }
 
-struct GeneratorSettings: Equatable {
+struct GeneratorSettings: Equatable, Codable {
     var widthInches: Double = 5.0
     var heightInches: Double = 1.15
     var density: Double = 0.62

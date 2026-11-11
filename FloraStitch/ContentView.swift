@@ -8,6 +8,14 @@ struct ContentView: View {
     @State private var exportFormat: ExportFormat = .svg
     @State private var exportFile: ExportFile?
     @State private var exportMessage = "Ready"
+    @AppStorage("flora.savedDesigns.v1") private var savedData = Data()
+    @State private var namingDesign = false
+    @State private var savedName = ""
+    @State private var pendingRestore: SavedDesign?
+    @State private var pendingDelete: SavedDesign?
+    private var savedDesigns: [SavedDesign] {
+        ((try? JSONDecoder().decode([SavedDesign].self, from: savedData)) ?? []).filter { $0.isValid }
+    }
 
     init() {
         let initialSeed = Int.random(in: 10000...99999)
@@ -25,6 +33,7 @@ struct ContentView: View {
                         DesignPreview(design: design)
                             .frame(height: 270)
                         stats
+                        savedLibrary
                         controls
                     }
                     .padding(18)
@@ -41,6 +50,31 @@ struct ContentView: View {
                     }
                 }
             }
+            .alert("Save design / 図案を保存", isPresented: $namingDesign) {
+                TextField("Name / 名前", text: $savedName)
+                Button("Cancel / キャンセル", role: .cancel) {}
+                Button("Save / 保存") { saveDesign() }
+            }
+            .confirmationDialog("Restore this design? / 現在の図案を置き換えますか？", isPresented: Binding(
+                get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }
+            ), titleVisibility: .visible) {
+                Button("Restore / 復元") {
+                    if let item = pendingRestore { seed = item.seed; settings = item.settings; regenerate() }
+                    pendingRestore = nil
+                }
+            }
+            .alert("保存した図案を削除しますか？", isPresented: Binding(
+                get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+            )) {
+                Button("キャンセル", role: .cancel) { pendingDelete = nil }
+                Button("削除", role: .destructive) {
+                    if let item = pendingDelete {
+                        do { savedData = try JSONEncoder().encode(savedDesigns.filter { $0.id != item.id }) }
+                        catch { exportMessage = "削除を保存できませんでした" }
+                    }
+                    pendingDelete = nil
+                }
+            } message: { Text("現在表示中の図案や書き出したファイルは変更しません。") }
             .sheet(item: $exportFile) { item in
                 ShareSheet(items: [item.url])
             }
@@ -124,6 +158,42 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(AppTheme.line, lineWidth: 1)
         )
+    }
+
+    private var savedLibrary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Saved designs / 保存した図案").font(.headline)
+            Text(String(format: "Design size / 図案寸法：%.1f × %.1f mm", Double(design.size.width) / 240 * 25.4, Double(design.size.height) / 240 * 25.4))
+                .font(.caption).monospacedDigit()
+            Text("寸法は図案キャンバスの目安です。刺しゅう枠・糸・布に合わせ、出力データの確認と試し縫いを行ってください。")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button { savedName = "Seed \(design.seed)"; namingDesign = true } label: {
+                    Label("Save current / 現在の図案を保存", systemImage: "bookmark")
+                }.disabled(savedDesigns.count >= 50)
+                Menu("Restore / 復元（\(savedDesigns.count)）") {
+                    ForEach(savedDesigns) { item in
+                        Button("\(item.name) · \(item.seed)") { pendingRestore = item }
+                    }
+                    Divider()
+                    Menu("Delete saved design / 保存した図案を削除") {
+                        ForEach(savedDesigns) { item in Button(item.name, role: .destructive) { pendingDelete = item } }
+                    }
+                }.disabled(savedDesigns.isEmpty)
+            }.buttonStyle(.bordered)
+            if savedDesigns.count >= 50 { Text("保存上限は50件です。").font(.caption) }
+        }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func saveDesign() {
+        var list = savedDesigns
+        guard list.count < 50 else { return }
+        let name = savedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let item = SavedDesign(name: String((name.isEmpty ? "Seed \(design.seed)" : name).prefix(60)), seed: design.seed, settings: settings)
+        guard item.isValid else { exportMessage = "Invalid design settings"; return }
+        list.insert(item, at: 0)
+        do { savedData = try JSONEncoder().encode(list); exportMessage = "Saved / 保存しました：\(item.name)" }
+        catch { exportMessage = "Save failed / 保存できませんでした" }
     }
 
     private func randomize() {

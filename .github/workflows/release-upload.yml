@@ -1,9 +1,6 @@
 name: FloraStitch App Store upload
 on:
   workflow_dispatch:
-  push:
-    branches: ["improve/**"]
-    paths: [.github/workflows/release-upload.yml]
 permissions:
   contents: read
 jobs:
@@ -21,7 +18,7 @@ jobs:
 
       - name: Model regression tests
         run: |
-          swiftc -target "$(uname -m)-apple-macosx14.0" FloraStitch/DesignCatalog.swift FloraStitch/CollectionGenerator.swift FloraStitch/Exporters.swift FloraStitch/Models.swift FloraStitch/StitchPlanner.swift FloraStitch/FloraGenerator.swift FloraStitch/SavedDesign.swift Tests/main.swift -o "$RUNNER_TEMP/model-tests"
+          swiftc -target "$(uname -m)-apple-macosx14.0" FloraStitch/DesignCatalog.swift FloraStitch/CollectionGenerator.swift FloraStitch/Exporters.swift FloraStitch/Models.swift FloraStitch/StitchPlanner.swift FloraStitch/FloraGenerator.swift FloraStitch/SavedDesign.swift FloraStitch/PhotoTiles.swift Tests/main.swift -o "$RUNNER_TEMP/model-tests"
           "$RUNNER_TEMP/model-tests"
       - name: Generate project
         run: |

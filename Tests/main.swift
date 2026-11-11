@@ -35,6 +35,7 @@ let sampled = PhotoTiles.make(data: imageData as Data, palette: FloraGenerator.p
 assert(sampled.count == 144 && Set(sampled).count == 1)
 assert(DesignCatalog.presets.count == 24 && FloraGenerator.palettes.count == 12)
 try FileManager.default.createDirectory(atPath: "catalog-previews", withIntermediateDirectories: true)
+try SVGExporter.data(for: withPhoto).write(to: URL(fileURLWithPath: "catalog-previews/photo-birds.svg"))
 var signatures = Set<Data>()
 for preset in DesignCatalog.presets {
     let design = FloraGenerator.make(seed: preset.seed, settings: preset.settings)

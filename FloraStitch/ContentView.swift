@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct ContentView: View {
     @State private var settings = GeneratorSettings()
@@ -8,6 +9,16 @@ struct ContentView: View {
     @State private var exportFormat: ExportFormat = .svg
     @State private var exportFile: ExportFile?
     @State private var exportMessage = "Ready"
+    @AppStorage("flora.savedDesigns.v1") private var savedData = Data()
+    @State private var namingDesign = false
+    @State private var savedName = ""
+    @State private var pendingRestore: SavedDesign?
+    @State private var pendingDelete: SavedDesign?
+    @State private var showingCatalog = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    private var savedDesigns: [SavedDesign] {
+        ((try? JSONDecoder().decode([SavedDesign].self, from: savedData)) ?? []).filter { $0.isValid }
+    }
 
     init() {
         let initialSeed = Int.random(in: 10000...99999)
@@ -24,7 +35,12 @@ struct ContentView: View {
                         header
                         DesignPreview(design: design)
                             .frame(height: 270)
+                        Button { showingCatalog = true } label: {
+                            Label("図案コレクション · 24種類から選ぶ", systemImage: "square.grid.2x2")
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        }.buttonStyle(.borderedProminent).tint(AppTheme.leaf)
                         stats
+                        savedLibrary
                         controls
                     }
                     .padding(18)
@@ -41,6 +57,41 @@ struct ContentView: View {
                     }
                 }
             }
+            .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--store-screenshot") { showingCatalog = true }
+                #endif
+            }
+            .alert("Save design / 図案を保存", isPresented: $namingDesign) {
+                TextField("Name / 名前", text: $savedName)
+                Button("Cancel / キャンセル", role: .cancel) {}
+                Button("Save / 保存") { saveDesign() }
+            }
+            .confirmationDialog("Restore this design? / 現在の図案を置き換えますか？", isPresented: Binding(
+                get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } }
+            ), titleVisibility: .visible) {
+                Button("Restore / 復元") {
+                    if let item = pendingRestore { seed = item.seed; settings = item.settings; regenerate() }
+                    pendingRestore = nil
+                }
+            }
+            .alert("保存した図案を削除しますか？", isPresented: Binding(
+                get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }
+            )) {
+                Button("キャンセル", role: .cancel) { pendingDelete = nil }
+                Button("削除", role: .destructive) {
+                    if let item = pendingDelete {
+                        do { savedData = try JSONEncoder().encode(savedDesigns.filter { $0.id != item.id }) }
+                        catch { exportMessage = "削除を保存できませんでした" }
+                    }
+                    pendingDelete = nil
+                }
+            } message: { Text("現在表示中の図案や書き出したファイルは変更しません。") }
+            .sheet(isPresented: $showingCatalog) {
+                DesignCatalogView { preset in
+                    settings = preset.settings; seed = preset.seed; regenerate()
+                }
+            }
             .sheet(item: $exportFile) { item in
                 ShareSheet(items: [item.url])
             }
@@ -49,10 +100,10 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Random floral borders for embroidery")
+            Text("花と葉でつくる、私の刺しゅう図案")
                 .font(.system(size: 31, weight: .semibold, design: .serif))
                 .foregroundStyle(AppTheme.ink)
-            Text("Create original vine, leaf, flower, berry, and curl patterns from a seed. Export SVG, DST, or experimental PES.")
+            Text("24種類の図案から選び、配置・花・配色を自由に組み合わせ。シードを変えると同じテーマの別案も作れます。SVG・DST・実験的なPES形式に対応。")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -95,6 +146,30 @@ struct ContentView: View {
                 regenerate()
             }
 
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("小鳥を添える", isOn: $settings.birds).onChange(of: settings.birds) { _, _ in regenerate() }
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label("写真を色付きタイルにする", systemImage: "photo.on.rectangle")
+                }
+                if settings.photoTiles != nil {
+                    Button("写真タイルを外す", role: .destructive) { settings.photoTiles = nil; selectedPhoto = nil; regenerate() }
+                }
+                Text("写真は端末内で12×12の配色に変換します。刺しゅうデータはタイルの輪郭を縫います。元の写真は保存しません。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            .onChange(of: selectedPhoto) { _, item in
+                guard let item else { return }
+                Task {
+                    do {
+                        guard let data = try await item.loadTransferable(type: Data.self), data.count <= 15_000_000,
+                              let tiles = PhotoTiles.make(data: data, palette: FloraGenerator.palettes[settings.paletteIndex]) else {
+                            exportMessage = "写真を読み込めませんでした。別の写真を選んでください。"; return
+                        }
+                        settings.photoTiles = tiles; regenerate()
+                    } catch { exportMessage = "写真を読み込めませんでした。" }
+                }
+            }
+
             VStack(spacing: 12) {
                 Picker("Format", selection: $exportFormat) {
                     ForEach(ExportFormat.allCases) { format in
@@ -126,6 +201,42 @@ struct ContentView: View {
         )
     }
 
+    private var savedLibrary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Saved designs / 保存した図案").font(.headline)
+            Text(String(format: "Design size / 図案寸法：%.1f × %.1f mm", Double(design.size.width) / 240 * 25.4, Double(design.size.height) / 240 * 25.4))
+                .font(.caption).monospacedDigit()
+            Text("寸法は図案キャンバスの目安です。刺しゅう枠・糸・布に合わせ、出力データの確認と試し縫いを行ってください。")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button { savedName = "Seed \(design.seed)"; namingDesign = true } label: {
+                    Label("Save current / 現在の図案を保存", systemImage: "bookmark")
+                }.disabled(savedDesigns.count >= 50)
+                Menu("Restore / 復元（\(savedDesigns.count)）") {
+                    ForEach(savedDesigns) { item in
+                        Button("\(item.name) · \(item.seed)") { pendingRestore = item }
+                    }
+                    Divider()
+                    Menu("Delete saved design / 保存した図案を削除") {
+                        ForEach(savedDesigns) { item in Button(item.name, role: .destructive) { pendingDelete = item } }
+                    }
+                }.disabled(savedDesigns.isEmpty)
+            }.buttonStyle(.bordered)
+            if savedDesigns.count >= 50 { Text("保存上限は50件です。").font(.caption) }
+        }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func saveDesign() {
+        var list = savedDesigns
+        guard list.count < 50 else { return }
+        let name = savedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let item = SavedDesign(name: String((name.isEmpty ? "Seed \(design.seed)" : name).prefix(60)), seed: design.seed, settings: settings)
+        guard item.isValid else { exportMessage = "Invalid design settings"; return }
+        list.insert(item, at: 0)
+        do { savedData = try JSONEncoder().encode(list); exportMessage = "Saved / 保存しました：\(item.name)" }
+        catch { exportMessage = "Save failed / 保存できませんでした" }
+    }
+
     private func randomize() {
         seed = Int.random(in: 10000...99999)
         regenerate()
@@ -149,7 +260,7 @@ struct ContentView: View {
     }
 }
 
-private struct DesignPreview: View {
+struct DesignPreview: View {
     let design: StitchDesign
 
     var body: some View {
@@ -211,6 +322,8 @@ private struct DesignPreview: View {
             context.stroke(Path(ellipseIn: rect), with: .color(AppTheme.thread.opacity(0.45)), lineWidth: 0.8)
         case .curl(let curl):
             context.stroke(polyline(StitchPlanner.curlPoints(curl)), with: .color(curl.color.color), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round, dash: [1.8, 2.8]))
+        case .tile(let tile):
+            context.fill(Path(tile.rect), with: .color(tile.color.color))
         }
     }
 
@@ -231,6 +344,15 @@ private struct SettingsPanel: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            Picker("配置", selection: Binding(get: { settings.layout }, set: { settings.layout = $0; onChange() })) {
+                ForEach(FloralLayout.allCases) { Text($0.title).tag($0) }
+            }
+            Picker("花のモチーフ", selection: Binding(get: { settings.motif }, set: { settings.motif = $0; onChange() })) {
+                ForEach(FloralMotif.allCases) { Text($0.title).tag($0) }
+            }
+            control(title: "Height", value: "\(String(format: "%.1f", settings.heightInches)) in", icon: "arrow.up.and.down") {
+                Slider(value: binding(\.heightInches), in: 1.0...5.5, step: 0.1)
+            }
             control(title: "Width", value: "\(String(format: "%.1f", settings.widthInches)) in", icon: "arrow.left.and.right") {
                 Slider(value: binding(\.widthInches), in: 3.0...5.5, step: 0.1)
             }
@@ -244,11 +366,11 @@ private struct SettingsPanel: View {
                 Label("Curl stitches", systemImage: "scribble.variable")
             }
             Picker("Palette", selection: Binding(get: { settings.paletteIndex }, set: { settings.paletteIndex = $0; onChange() })) {
-                Text("Garden").tag(0)
-                Text("Market").tag(1)
-                Text("Meadow").tag(2)
+                ForEach(DesignCatalog.paletteNames.indices, id: \.self) { index in
+                    Text(DesignCatalog.paletteNames[index]).tag(index)
+                }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
         }
     }
 

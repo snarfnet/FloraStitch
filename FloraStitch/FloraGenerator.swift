@@ -27,12 +27,53 @@ enum FloraGenerator {
             EmbroideryColor(name: "Cream", hex: "#F5E8C5"),
             EmbroideryColor(name: "Seed", hex: "#7B5B35")
         ]
-    ]
+    ] + [
+        ["76545E", "A18B7A", "EEA4BB", "F7CDDA", "FFF0DF", "915B61"],
+        ["476653", "93A591", "9578BD", "C2A6D7", "E4D6EA", "544064"],
+        ["326D70", "87ABA5", "66AFC6", "A6CFD6", "EED9AD", "395566"],
+        ["665A32", "A49A54", "B94D38", "D88A37", "DBB768", "633B2F"],
+        ["294D42", "769183", "AC3B50", "D3767B", "EFE4D1", "4A373A"],
+        ["263B62", "587CA1", "426DA0", "8CAFD2", "DCE6ED", "25334F"],
+        ["6D7152", "AAAB87", "BA8A79", "DABAA2", "E9D7B9", "6B5044"],
+        ["344B50", "779691", "B37CB5", "D3A6CB", "C9C6DF", "363B59"],
+        ["68764A", "A9B57A", "E7BC38", "F2D46D", "F5E8B1", "846C35"]
+    ].enumerated().map { index, colors in
+        colors.enumerated().map { slot, hex in EmbroideryColor(name: "Palette \(index + 4) Thread \(slot + 1)", hex: "#" + hex) }
+    }
 
     static func make(seed: Int, settings: GeneratorSettings) -> StitchDesign {
+        let base = makeBase(seed: seed, settings: settings)
+        guard settings.birds || settings.photoTiles != nil else { return base }
+        var elements = base.elements
+        let size = base.size, palette = base.palette
+        if settings.birds {
+            let unit = min(size.width, size.height)
+            for (x, direction) in [(0.28, 1.0), (0.56, -1.0)] {
+                let center = CGPoint(x: size.width * CGFloat(x), y: size.height * 0.26)
+                let radius = unit * 0.06
+                let direction = CGFloat(direction)
+                elements.append(.leaf(LeafElement(center: center, size: CGSize(width: radius * 1.3, height: radius * 2.3), angle: .pi / 2, color: palette[3], veinColor: palette[5])))
+                elements.append(.berry(BerryElement(center: CGPoint(x: center.x + radius * direction, y: center.y - radius * 0.42), radius: radius * 0.42, color: palette[3])))
+                elements.append(.vine(VineElement(points: [CGPoint(x: center.x + radius * 1.35 * direction, y: center.y - radius * 0.42), CGPoint(x: center.x + radius * 1.72 * direction, y: center.y - radius * 0.28)], color: palette[5], width: 1.8)))
+            }
+        }
+        if let tiles = settings.photoTiles, tiles.count == 144, tiles.allSatisfy({ palette.indices.contains($0) }) {
+            let side = min(size.width * 0.24, size.height * 0.65)
+            let cell = side / 12, origin = CGPoint(x: size.width * 0.70, y: (size.height - side) / 2)
+            for y in 0..<12 { for x in 0..<12 {
+                elements.append(.tile(TileElement(rect: CGRect(x: origin.x + CGFloat(x) * cell, y: origin.y + CGFloat(y) * cell, width: cell, height: cell), color: palette[tiles[y * 12 + x]])))
+            } }
+        }
+        return StitchDesign(seed: seed, size: size, palette: palette, elements: elements, stitchPlan: StitchPlanner.plan(elements: elements, size: size, palette: palette))
+    }
+
+    private static func makeBase(seed: Int, settings: GeneratorSettings) -> StitchDesign {
+        if settings.layout != .classic || settings.motif != .mixed {
+            return makeCollection(seed: seed, settings: settings)
+        }
         var rng = SeededRandomGenerator(seed: seed)
         let size = settings.canvasSize
-        let palette = palettes[settings.paletteIndex % palettes.count]
+        let palette = palettes[((settings.paletteIndex % palettes.count) + palettes.count) % palettes.count]
         let leafDark = palette[0]
         let leafLight = palette[1]
         let flowerColors = Array(palette[2...4])

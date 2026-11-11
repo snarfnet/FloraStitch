@@ -27,6 +27,7 @@ enum DesignElement: Identifiable {
     case flower(FlowerElement)
     case berry(BerryElement)
     case curl(CurlElement)
+    case tile(TileElement)
 
     var id: UUID {
         switch self {
@@ -35,6 +36,7 @@ enum DesignElement: Identifiable {
         case .flower(let item): item.id
         case .berry(let item): item.id
         case .curl(let item): item.id
+        case .tile(let item): item.id
         }
     }
 }
@@ -81,6 +83,12 @@ struct CurlElement {
     let color: EmbroideryColor
 }
 
+struct TileElement {
+    let id = UUID()
+    let rect: CGRect
+    let color: EmbroideryColor
+}
+
 struct StitchPlan {
     let colors: [EmbroideryColor]
     let blocks: [StitchBlock]
@@ -101,13 +109,37 @@ struct StitchPoint {
     let jump: Bool
 }
 
-struct GeneratorSettings: Equatable {
+struct GeneratorSettings: Equatable, Codable {
     var widthInches: Double = 5.0
     var heightInches: Double = 1.15
     var density: Double = 0.62
     var flowerMix: Double = 0.58
     var curls: Bool = true
     var paletteIndex: Int = 0
+
+    var layout: FloralLayout = .classic
+    var motif: FloralMotif = .mixed
+    var birds: Bool = false
+    /// A bounded, palette-indexed thumbnail; the original photo is never stored.
+    var photoTiles: [Int]? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case widthInches, heightInches, density, flowerMix, curls, paletteIndex, layout, motif, birds, photoTiles
+    }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        widthInches = try c.decode(Double.self, forKey: .widthInches)
+        heightInches = try c.decode(Double.self, forKey: .heightInches)
+        density = try c.decode(Double.self, forKey: .density)
+        flowerMix = try c.decode(Double.self, forKey: .flowerMix)
+        curls = try c.decode(Bool.self, forKey: .curls)
+        paletteIndex = try c.decode(Int.self, forKey: .paletteIndex)
+        layout = try c.decodeIfPresent(FloralLayout.self, forKey: .layout) ?? .classic
+        motif = try c.decodeIfPresent(FloralMotif.self, forKey: .motif) ?? .mixed
+        birds = try c.decodeIfPresent(Bool.self, forKey: .birds) ?? false
+        photoTiles = try c.decodeIfPresent([Int].self, forKey: .photoTiles)
+    }
 
     var canvasSize: CGSize {
         CGSize(width: CGFloat(widthInches * 240.0), height: CGFloat(heightInches * 240.0))

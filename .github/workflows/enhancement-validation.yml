@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Model regression tests
         run: |
-          swiftc -target "$(uname -m)-apple-macosx14.0" FloraStitch/DesignCatalog.swift FloraStitch/CollectionGenerator.swift FloraStitch/Exporters.swift FloraStitch/Models.swift FloraStitch/StitchPlanner.swift FloraStitch/FloraGenerator.swift FloraStitch/SavedDesign.swift Tests/main.swift -o "$RUNNER_TEMP/model-tests"
+          swiftc -target "$(uname -m)-apple-macosx14.0" FloraStitch/DesignCatalog.swift FloraStitch/CollectionGenerator.swift FloraStitch/Exporters.swift FloraStitch/Models.swift FloraStitch/StitchPlanner.swift FloraStitch/FloraGenerator.swift FloraStitch/SavedDesign.swift FloraStitch/PhotoTiles.swift Tests/main.swift -o "$RUNNER_TEMP/model-tests"
           "$RUNNER_TEMP/model-tests"
       - name: Install XcodeGen
         run: command -v xcodegen || brew install xcodegen

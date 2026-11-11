@@ -69,6 +69,8 @@ enum SVGExporter {
             return "<circle cx=\"\(fmt(berry.center.x))\" cy=\"\(fmt(berry.center.y))\" r=\"\(fmt(berry.radius))\" fill=\"\(berry.color.hex)\" stroke=\"#4a2d2e\" stroke-width=\"0.7\"/>"
         case .curl(let curl):
             return "<polyline points=\"\(points(StitchPlanner.curlPoints(curl)))\" fill=\"none\" stroke=\"\(curl.color.hex)\" stroke-width=\"1.3\" stroke-linecap=\"round\"/>"
+        case .tile(let tile):
+            return "<rect x=\"\(fmt(tile.rect.minX))\" y=\"\(fmt(tile.rect.minY))\" width=\"\(fmt(tile.rect.width))\" height=\"\(fmt(tile.rect.height))\" fill=\"\(tile.color.hex)\"/>"
         }
     }
 

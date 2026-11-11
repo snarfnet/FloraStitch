@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct ContentView: View {
     @State private var settings = GeneratorSettings()
@@ -14,6 +15,7 @@ struct ContentView: View {
     @State private var pendingRestore: SavedDesign?
     @State private var pendingDelete: SavedDesign?
     @State private var showingCatalog = false
+    @State private var selectedPhoto: PhotosPickerItem?
     private var savedDesigns: [SavedDesign] {
         ((try? JSONDecoder().decode([SavedDesign].self, from: savedData)) ?? []).filter { $0.isValid }
     }
@@ -142,6 +144,30 @@ struct ContentView: View {
 
             SettingsPanel(settings: $settings) {
                 regenerate()
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("小鳥を添える", isOn: $settings.birds).onChange(of: settings.birds) { _, _ in regenerate() }
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Label("写真を色付きタイルにする", systemImage: "photo.on.rectangle")
+                }
+                if settings.photoTiles != nil {
+                    Button("写真タイルを外す", role: .destructive) { settings.photoTiles = nil; selectedPhoto = nil; regenerate() }
+                }
+                Text("写真は端末内で12×12の配色に変換します。刺しゅうデータはタイルの輪郭を縫います。元の写真は保存しません。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            .onChange(of: selectedPhoto) { _, item in
+                guard let item else { return }
+                Task {
+                    do {
+                        guard let data = try await item.loadTransferable(type: Data.self), data.count <= 15_000_000,
+                              let tiles = PhotoTiles.make(data: data, palette: FloraGenerator.palettes[settings.paletteIndex]) else {
+                            exportMessage = "写真を読み込めませんでした。別の写真を選んでください。"; return
+                        }
+                        settings.photoTiles = tiles; regenerate()
+                    } catch { exportMessage = "写真を読み込めませんでした。" }
+                }
             }
 
             VStack(spacing: 12) {
@@ -296,6 +322,8 @@ struct DesignPreview: View {
             context.stroke(Path(ellipseIn: rect), with: .color(AppTheme.thread.opacity(0.45)), lineWidth: 0.8)
         case .curl(let curl):
             context.stroke(polyline(StitchPlanner.curlPoints(curl)), with: .color(curl.color.color), style: StrokeStyle(lineWidth: 1.25, lineCap: .round, lineJoin: .round, dash: [1.8, 2.8]))
+        case .tile(let tile):
+            context.fill(Path(tile.rect), with: .color(tile.color.color))
         }
     }
 

@@ -17,6 +17,10 @@ enum StitchPlanner {
                 appendCircle(center: berry.center, radius: berry.radius, color: berry.color, to: &blocksByColor)
             case .curl(let curl):
                 appendPolyline(curlPoints(curl), color: curl.color, to: &blocksByColor)
+            case .tile(let tile):
+                let r = tile.rect
+                let points = [CGPoint(x:r.minX,y:r.minY), CGPoint(x:r.maxX,y:r.minY), CGPoint(x:r.maxX,y:r.maxY), CGPoint(x:r.minX,y:r.maxY), CGPoint(x:r.minX,y:r.minY)]
+                appendPolyline(points, color: tile.color, to: &blocksByColor)
             }
         }
 

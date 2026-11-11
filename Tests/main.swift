@@ -11,3 +11,36 @@ assert(!p1.isEmpty && p1.count == p2.count)
 assert(zip(p1, p2).allSatisfy { $0.x == $1.x && $0.y == $1.y && $0.jump == $1.jump })
 var invalid = a; invalid.settings.paletteIndex = 100; assert(!invalid.isValid)
 print("PASS: favorites round trip reproduces exact stitch coordinates; invalid settings rejected")
+
+let legacy = Data("{\"widthInches\":5,\"heightInches\":1.15,\"density\":0.62,\"flowerMix\":0.58,\"curls\":true,\"paletteIndex\":0}".utf8)
+let old = try JSONDecoder().decode(GeneratorSettings.self, from: legacy)
+assert(old.layout == .classic && old.motif == .mixed)
+assert(DesignCatalog.presets.count == 24 && FloraGenerator.palettes.count == 12)
+try FileManager.default.createDirectory(atPath: "catalog-previews", withIntermediateDirectories: true)
+var signatures = Set<Data>()
+for preset in DesignCatalog.presets {
+    let design = FloraGenerator.make(seed: preset.seed, settings: preset.settings)
+    let restored = try JSONDecoder().decode(GeneratorSettings.self, from: JSONEncoder().encode(preset.settings))
+    let repeatDesign = FloraGenerator.make(seed: preset.seed, settings: restored)
+    let svg = SVGExporter.data(for: design)
+    assert(svg == SVGExporter.data(for: repeatDesign), "Restore changed preset \(preset.name)")
+    signatures.insert(svg)
+    assert(DSTExporter.data(for: design).count > 512)
+    assert(PESExporter.data(for: design).count > 20)
+    assert(design.stitchPlan.stitchCount > 0 && design.stitchPlan.stitchCount < 100_000)
+    try svg.write(to: URL(fileURLWithPath: "catalog-previews/\(preset.id + 1).svg"))
+}
+assert(signatures.count == 24)
+for layout in FloralLayout.allCases where layout != .classic {
+    for motif in FloralMotif.allCases {
+        for height in [1.0, 5.5] {
+            var s = GeneratorSettings(); s.layout = layout; s.motif = motif; s.heightInches = height
+            s.density = 1; s.flowerMix = 1; s.widthInches = 3
+            let d = FloraGenerator.make(seed: 9182, settings: s)
+            assert(d.stitchPlan.blocks.flatMap { $0.points }.allSatisfy {
+                $0.x.isFinite && $0.y.isFinite && $0.x >= 0 && $0.y >= 0 && $0.x <= Double(d.size.width) && $0.y <= Double(d.size.height)
+            }, "Out of bounds: \(layout) \(motif) \(height)")
+        }
+    }
+}
+print("PASS: 24 unique presets, legacy decoding, deterministic restore, SVG/DST/PES payloads, 96 boundary combinations")

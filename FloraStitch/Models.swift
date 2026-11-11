@@ -109,6 +109,25 @@ struct GeneratorSettings: Equatable, Codable {
     var curls: Bool = true
     var paletteIndex: Int = 0
 
+    var layout: FloralLayout = .classic
+    var motif: FloralMotif = .mixed
+
+    enum CodingKeys: String, CodingKey {
+        case widthInches, heightInches, density, flowerMix, curls, paletteIndex, layout, motif
+    }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        widthInches = try c.decode(Double.self, forKey: .widthInches)
+        heightInches = try c.decode(Double.self, forKey: .heightInches)
+        density = try c.decode(Double.self, forKey: .density)
+        flowerMix = try c.decode(Double.self, forKey: .flowerMix)
+        curls = try c.decode(Bool.self, forKey: .curls)
+        paletteIndex = try c.decode(Int.self, forKey: .paletteIndex)
+        layout = try c.decodeIfPresent(FloralLayout.self, forKey: .layout) ?? .classic
+        motif = try c.decodeIfPresent(FloralMotif.self, forKey: .motif) ?? .mixed
+    }
+
     var canvasSize: CGSize {
         CGSize(width: CGFloat(widthInches * 240.0), height: CGFloat(heightInches * 240.0))
     }

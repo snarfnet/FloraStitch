@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var savedName = ""
     @State private var pendingRestore: SavedDesign?
     @State private var pendingDelete: SavedDesign?
+    @State private var showingCatalog = false
     private var savedDesigns: [SavedDesign] {
         ((try? JSONDecoder().decode([SavedDesign].self, from: savedData)) ?? []).filter { $0.isValid }
     }
@@ -32,6 +33,10 @@ struct ContentView: View {
                         header
                         DesignPreview(design: design)
                             .frame(height: 270)
+                        Button { showingCatalog = true } label: {
+                            Label("図案コレクション · 24種類から選ぶ", systemImage: "square.grid.2x2")
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        }.buttonStyle(.borderedProminent).tint(AppTheme.leaf)
                         stats
                         savedLibrary
                         controls
@@ -75,6 +80,11 @@ struct ContentView: View {
                     pendingDelete = nil
                 }
             } message: { Text("現在表示中の図案や書き出したファイルは変更しません。") }
+            .sheet(isPresented: $showingCatalog) {
+                DesignCatalogView { preset in
+                    settings = preset.settings; seed = preset.seed; regenerate()
+                }
+            }
             .sheet(item: $exportFile) { item in
                 ShareSheet(items: [item.url])
             }
@@ -83,10 +93,10 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Random floral borders for embroidery")
+            Text("花と葉でつくる、私の刺しゅう図案")
                 .font(.system(size: 31, weight: .semibold, design: .serif))
                 .foregroundStyle(AppTheme.ink)
-            Text("Create original vine, leaf, flower, berry, and curl patterns from a seed. Export SVG, DST, or experimental PES.")
+            Text("24種類の図案から選び、配置・花・配色を自由に組み合わせ。シードを変えると同じテーマの別案も作れます。SVG・DST・実験的なPES形式に対応。")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(AppTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -219,7 +229,7 @@ struct ContentView: View {
     }
 }
 
-private struct DesignPreview: View {
+struct DesignPreview: View {
     let design: StitchDesign
 
     var body: some View {
@@ -301,6 +311,15 @@ private struct SettingsPanel: View {
 
     var body: some View {
         VStack(spacing: 14) {
+            Picker("配置", selection: Binding(get: { settings.layout }, set: { settings.layout = $0; onChange() })) {
+                ForEach(FloralLayout.allCases) { Text($0.title).tag($0) }
+            }
+            Picker("花のモチーフ", selection: Binding(get: { settings.motif }, set: { settings.motif = $0; onChange() })) {
+                ForEach(FloralMotif.allCases) { Text($0.title).tag($0) }
+            }
+            control(title: "Height", value: "\(String(format: "%.1f", settings.heightInches)) in", icon: "arrow.up.and.down") {
+                Slider(value: binding(\.heightInches), in: 1.0...5.5, step: 0.1)
+            }
             control(title: "Width", value: "\(String(format: "%.1f", settings.widthInches)) in", icon: "arrow.left.and.right") {
                 Slider(value: binding(\.widthInches), in: 3.0...5.5, step: 0.1)
             }
@@ -314,11 +333,11 @@ private struct SettingsPanel: View {
                 Label("Curl stitches", systemImage: "scribble.variable")
             }
             Picker("Palette", selection: Binding(get: { settings.paletteIndex }, set: { settings.paletteIndex = $0; onChange() })) {
-                Text("Garden").tag(0)
-                Text("Market").tag(1)
-                Text("Meadow").tag(2)
+                ForEach(DesignCatalog.paletteNames.indices, id: \.self) { index in
+                    Text(DesignCatalog.paletteNames[index]).tag(index)
+                }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
         }
     }
 

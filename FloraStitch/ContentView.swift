@@ -55,6 +55,11 @@ struct ContentView: View {
                     }
                 }
             }
+            .onAppear {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--store-screenshot") { showingCatalog = true }
+                #endif
+            }
             .alert("Save design / 図案を保存", isPresented: $namingDesign) {
                 TextField("Name / 名前", text: $savedName)
                 Button("Cancel / キャンセル", role: .cancel) {}
